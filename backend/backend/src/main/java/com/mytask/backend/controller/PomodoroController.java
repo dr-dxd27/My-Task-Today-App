@@ -1,5 +1,7 @@
 package com.mytask.backend.controller;
 
+import com.mytask.backend.dto.PomodoroRecordResponse;
+import com.mytask.backend.dto.PomodoroStatsResponse;
 import com.mytask.backend.model.PomodoroSession;
 import com.mytask.backend.service.PomodoroService;
 import lombok.RequiredArgsConstructor;
@@ -17,10 +19,12 @@ public class PomodoroController {
     private final PomodoroService pomodoroService;
 
     @PostMapping("/start")
-    public ResponseEntity<PomodoroSession> startSession(@RequestBody Map<String, Object> body) {
-        Long taskId = Long.valueOf(body.get("taskId").toString());
-        int duration = body.containsKey("durationMinutes")
-                ? (int) body.get("durationMinutes") : 25;
+    public ResponseEntity<PomodoroSession> startSession(
+            @RequestBody Map<String, Object> body) {
+        Long taskId = body.get("taskId") != null
+                ? Long.valueOf(body.get("taskId").toString()) : null;
+        int duration = body.get("durationMinutes") != null
+                ? Integer.parseInt(body.get("durationMinutes").toString()) : 25;
         return ResponseEntity.ok(pomodoroService.startSession(taskId, duration));
     }
 
@@ -29,13 +33,16 @@ public class PomodoroController {
         return ResponseEntity.ok(pomodoroService.completeSession(id));
     }
 
-    @GetMapping("/task/{taskId}")
-    public ResponseEntity<List<PomodoroSession>> getByTask(@PathVariable Long taskId) {
-        return ResponseEntity.ok(pomodoroService.getSessionsByTask(taskId));
+    // Trends — WEEK, MONTH, YEAR
+    @GetMapping("/stats")
+    public ResponseEntity<PomodoroStatsResponse> getStats(
+            @RequestParam(defaultValue = "WEEK") String range) {
+        return ResponseEntity.ok(pomodoroService.getStats(range));
     }
 
-    @GetMapping("/completed")
-    public ResponseEntity<List<PomodoroSession>> getCompleted() {
-        return ResponseEntity.ok(pomodoroService.getAllCompletedSessions());
+    // Focus Records
+    @GetMapping("/records")
+    public ResponseEntity<List<PomodoroRecordResponse>> getRecords() {
+        return ResponseEntity.ok(pomodoroService.getRecords());
     }
 }
