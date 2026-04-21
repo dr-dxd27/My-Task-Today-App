@@ -5,4 +5,7 @@ class ApiConfig {
   static const String calendar = '$baseUrl/tasks/calendar';
   static const String checklist = '$baseUrl/tasks/checklist';
   static const String pomodoro = '$baseUrl/pomodoro';
+  static const String pomodoroStats = '$baseUrl/pomodoro/stats';
+  static const String pomodoroRecords = '$baseUrl/pomodoro/records';
+  static const String habits = '$baseUrl/habits';
 }

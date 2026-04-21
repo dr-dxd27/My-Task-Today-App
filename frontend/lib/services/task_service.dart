@@ -27,6 +27,14 @@ class TaskService {
     throw Exception('Failed to load matrix');
   }
 
+  Future<List<Task>> getTodayTasks() async {
+    final now = DateTime.now();
+    final today =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final tasks = await getAllTasks();
+    return tasks.where((t) => t.dueDate == today).toList();
+  }
+
   // Calendar
   Future<List<Task>> getTasksByMonth(int year, int month) async {
     final url = '${ApiConfig.calendar}?year=$year&month=$month';
@@ -93,5 +101,14 @@ class TaskService {
     if (response.statusCode != 204) {
       throw Exception('Failed to delete task');
     }
+  }
+
+  // Ambil task 
+    Future<Task> getTaskById(int id) async {
+    final response = await http.get(Uri.parse('${ApiConfig.tasks}/$id'));
+    if (response.statusCode == 200) {
+      return Task.fromJson(jsonDecode(response.body));
+    }
+    throw Exception('Task not found');
   }
 }

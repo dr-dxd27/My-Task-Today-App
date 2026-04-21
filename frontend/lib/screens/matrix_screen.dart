@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/task_model.dart';
 import '../services/task_service.dart';
+import 'package:provider/provider.dart';
+import '../services/theme_service.dart';
 
 class MatrixScreen extends StatefulWidget {
   const MatrixScreen({super.key});
@@ -11,6 +13,7 @@ class MatrixScreen extends StatefulWidget {
 
 class _MatrixScreenState extends State<MatrixScreen> {
   final TaskService _taskService = TaskService();
+
   Map<String, List<Task>> _matrix = {
     'DO_FIRST': [],
     'SCHEDULE': [],
@@ -18,6 +21,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
     'ELIMINATE': [],
   };
   bool _isLoading = true;
+  String _todayLabel = '';
 
   final _quadrantConfig = {
     'DO_FIRST': {
@@ -57,19 +61,77 @@ class _MatrixScreenState extends State<MatrixScreen> {
   @override
   void initState() {
     super.initState();
+    _setTodayLabel();
     _loadMatrix();
+  }
+
+  void _setTodayLabel() {
+    final now = DateTime.now();
+    final days = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+    ];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
+    _todayLabel =
+        '${days[now.weekday % 7]}, ${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  String get _todayDate {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _loadMatrix() async {
     setState(() => _isLoading = true);
     try {
-      final matrix = await _taskService.getMatrix();
+      // Ambil hanya task hari ini
+      final todayTasks = await _taskService.getTodayTasks();
+
+      // Kelompokkan ke 4 kuadran
       setState(() {
         _matrix = {
-          'DO_FIRST': matrix['DO_FIRST'] ?? [],
-          'SCHEDULE': matrix['SCHEDULE'] ?? [],
-          'DELEGATE': matrix['DELEGATE'] ?? [],
-          'ELIMINATE': matrix['ELIMINATE'] ?? [],
+          'DO_FIRST': todayTasks
+              .where(
+                (t) => t.priority == 'URGENT' && t.importance == 'IMPORTANT',
+              )
+              .toList(),
+          'SCHEDULE': todayTasks
+              .where(
+                (t) =>
+                    t.priority == 'NOT_URGENT' && t.importance == 'IMPORTANT',
+              )
+              .toList(),
+          'DELEGATE': todayTasks
+              .where(
+                (t) =>
+                    t.priority == 'URGENT' && t.importance == 'NOT_IMPORTANT',
+              )
+              .toList(),
+          'ELIMINATE': todayTasks
+              .where(
+                (t) =>
+                    t.priority == 'NOT_URGENT' &&
+                    t.importance == 'NOT_IMPORTANT',
+              )
+              .toList(),
         };
         _isLoading = false;
       });
@@ -98,18 +160,26 @@ class _MatrixScreenState extends State<MatrixScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Info kuadran
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: (color as Color).withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                config['subtitle'] as String,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: color,
-                    fontWeight: FontWeight.w500),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 14, color: color),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Akan muncul di Calendar hari ini',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: color,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -141,18 +211,19 @@ class _MatrixScreenState extends State<MatrixScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: color),
             onPressed: () async {
               if (titleController.text.isEmpty) return;
+              // Set dueDate ke hari ini agar muncul di Calendar
               final task = Task(
                 title: titleController.text,
                 description: descController.text,
                 priority: config['priority'] as String,
                 importance: config['importance'] as String,
+                dueDate: _todayDate,
               );
               await _taskService.createTask(task);
               if (context.mounted) Navigator.pop(context);
               _loadMatrix();
             },
-            child: const Text('Simpan',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('Simpan', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -181,12 +252,29 @@ class _MatrixScreenState extends State<MatrixScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Eisenhower Matrix'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Eisenhower Matrix', style: TextStyle(fontSize: 16)),
+            Text(
+              _todayLabel,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.primaryContainer,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadMatrix,
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadMatrix),
+          Consumer<ThemeService>(
+            builder: (context, themeService, _) => IconButton(
+              icon: Icon(themeService.isDark ? Icons.light_mode : Icons.dark_mode),
+              onPressed: themeService.toggle,
+            ),
           ),
         ],
       ),
@@ -196,57 +284,15 @@ class _MatrixScreenState extends State<MatrixScreen> {
               padding: const EdgeInsets.all(8),
               child: Column(
                 children: [
-                  // Header labels
-                  Row(
-                    children: [
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Center(
-                          child: Text('URGENT',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.red.shade400)),
-                        ),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: Text('NOT URGENT',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade400)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
                   Expanded(
                     child: Row(
                       children: [
-                        // IMPORTANT label (rotated)
-                        RotatedBox(
-                          quarterTurns: 3,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('IMPORTANT',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.purple.shade400)),
-                          ),
-                        ),
                         Expanded(
                           child: Column(
                             children: [
-                              Expanded(
-                                child: _buildQuadrant('DO_FIRST'),
-                              ),
+                              Expanded(child: _buildQuadrant('DO_FIRST')),
                               const SizedBox(height: 8),
-                              Expanded(
-                                child: _buildQuadrant('DELEGATE'),
-                              ),
+                              Expanded(child: _buildQuadrant('DELEGATE')),
                             ],
                           ),
                         ),
@@ -254,27 +300,10 @@ class _MatrixScreenState extends State<MatrixScreen> {
                         Expanded(
                           child: Column(
                             children: [
-                              Expanded(
-                                child: _buildQuadrant('SCHEDULE'),
-                              ),
+                              Expanded(child: _buildQuadrant('SCHEDULE')),
                               const SizedBox(height: 8),
-                              Expanded(
-                                child: _buildQuadrant('ELIMINATE'),
-                              ),
+                              Expanded(child: _buildQuadrant('ELIMINATE')),
                             ],
-                          ),
-                        ),
-                        // NOT IMPORTANT label (rotated)
-                        RotatedBox(
-                          quarterTurns: 1,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('NOT IMPORTANT',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade400)),
                           ),
                         ),
                       ],
@@ -291,57 +320,87 @@ class _MatrixScreenState extends State<MatrixScreen> {
     final tasks = _matrix[quadrant] ?? [];
     final color = config['color'] as Color;
 
+    // Label axis per kuadran
+    final Map<String, List<String>> axisLabels = {
+      'DO_FIRST': ['URGENT', 'IMPORTANT'],
+      'SCHEDULE': ['NOT URGENT', 'IMPORTANT'],
+      'DELEGATE': ['URGENT', 'NOT IMPORTANT'],
+      'ELIMINATE': ['NOT URGENT', 'NOT IMPORTANT'],
+    };
+    final labels = axisLabels[quadrant]!;
+
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
-          // Quadrant header
+          // Header dengan judul + axis label
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
                 topRight: Radius.circular(12),
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(config['icon'] as IconData, color: color, size: 16),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    config['title'] as String,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                      fontSize: 13,
+                Row(
+                  children: [
+                    Icon(config['icon'] as IconData, color: color, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        config['title'] as String,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${tasks.length}',
-                    style: TextStyle(
-                        fontSize: 11,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${tasks.length}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () => _showAddTaskDialog(quadrant),
+                      child: Icon(
+                        Icons.add_circle_outline,
                         color: color,
-                        fontWeight: FontWeight.bold),
-                  ),
+                        size: 18,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                InkWell(
-                  onTap: () => _showAddTaskDialog(quadrant),
-                  child: Icon(Icons.add_circle_outline, color: color, size: 18),
+                const SizedBox(height: 4),
+                // Axis labels
+                Row(
+                  children: [
+                    _buildAxisBadge(labels[0], color),
+                    const SizedBox(width: 4),
+                    _buildAxisBadge(labels[1], color),
+                  ],
                 ),
               ],
             ),
@@ -351,9 +410,12 @@ class _MatrixScreenState extends State<MatrixScreen> {
             child: tasks.isEmpty
                 ? Center(
                     child: Text(
-                      'Tidak ada task',
+                      'Tidak ada task\nhari ini',
                       style: TextStyle(
-                          fontSize: 12, color: color.withOpacity(0.5)),
+                        fontSize: 12,
+                        color: color.withValues(alpha: 0.5),
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   )
                 : ListView.builder(
@@ -364,12 +426,15 @@ class _MatrixScreenState extends State<MatrixScreen> {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 4),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 6),
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: task.checked
+                              ? color.withValues(alpha: 0.08)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: color.withOpacity(0.2)),
+                          border: Border.all(color: color.withValues(alpha: 0.2)),
                         ),
                         child: Row(
                           children: [
@@ -381,7 +446,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
                                     : Icons.radio_button_unchecked,
                                 color: task.checked
                                     ? Colors.green
-                                    : color.withOpacity(0.5),
+                                    : color.withValues(alpha: 0.5),
                                 size: 18,
                               ),
                             ),
@@ -404,9 +469,11 @@ class _MatrixScreenState extends State<MatrixScreen> {
                             ),
                             InkWell(
                               onTap: () => _deleteTask(task),
-                              child: Icon(Icons.close,
-                                  size: 16,
-                                  color: Colors.grey.shade400),
+                              child: Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.grey.shade400,
+                              ),
                             ),
                           ],
                         ),
@@ -415,6 +482,25 @@ class _MatrixScreenState extends State<MatrixScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAxisBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }

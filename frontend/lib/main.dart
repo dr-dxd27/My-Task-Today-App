@@ -3,9 +3,21 @@ import 'screens/matrix_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/pomodoro_screen.dart';
 import 'screens/checklist_screen.dart';
+import 'screens/habit_screen.dart';
+import 'package:provider/provider.dart';
+import 'services/timer_service.dart';
+import 'services/theme_service.dart';
 
 void main() {
-  runApp(const MyTaskApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TimerService()),
+        ChangeNotifierProvider(create: (_) => ThemeService()),
+      ],
+      child: const MyTaskApp(),
+    ),
+  );
 }
 
 class MyTaskApp extends StatelessWidget {
@@ -13,14 +25,24 @@ class MyTaskApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'My Task Today',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+    return Consumer<ThemeService>(
+      builder: (context, themeService, _) => MaterialApp(
+        title: 'My Task Today',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          useMaterial3: true,
+        ),
+        darkTheme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.deepPurple,
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
+        ),
+        themeMode: themeService.themeMode,
+        home: const HomeScreen(),
       ),
-      home: const HomeScreen(),
     );
   }
 }
@@ -38,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _screens = [
     const MatrixScreen(),
     const CalendarScreen(),
+    const HabitScreen(),
     const PomodoroScreen(),
     const ChecklistScreen(),
   ];
@@ -59,6 +82,10 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(
             icon: Icon(Icons.calendar_month),
             label: 'Calendar',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.loop),
+            label: 'Habit',
           ),
           NavigationDestination(
             icon: Icon(Icons.timer),
